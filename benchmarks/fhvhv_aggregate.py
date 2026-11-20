@@ -54,8 +54,10 @@ def run_pandas(files: list[Path]):
         partials.append(part)
         del df
 
-    # A file can hold trips from a neighbouring month, so the same group may
-    # appear in two partials: sum them again.
+    # Sum the partials again in case the same group shows up in two files.
+    # FHVHV 2024-2025 has no trip outside its file's month, but yellow taxi
+    # files do (634 of 90M rows), so we do not rely on it. Sums and counts
+    # can be re-aggregated like this; means and distinct counts cannot.
     result = pd.concat(partials).groupby(level=GROUP_COLS).sum().reset_index()
     return result
 
