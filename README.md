@@ -24,6 +24,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 | `02_eda_quality.ipynb` | Data quality checks and proposed dbt rules |
 | `02b_eda_auto.ipynb` | Automatic EDA reports with Sweetviz (saved to `reports/`) |
 | `03_benchmark.ipynb` | pandas vs Polars vs DuckDB on all 24 FHVHV months (483M rows): time, peak memory, threads |
+| `04_bigquery.ipynb` | BigQuery external table over GCS: schema drift, what drives cost, bytes-billed cap, same query as DuckDB (bills ~34 GB per run) |
 
 The benchmark query itself is in `benchmarks/fhvhv_aggregate.py`, run once per engine in a separate process.
 
@@ -60,6 +61,7 @@ through **impersonation**, so no key file is ever downloaded:
    gcloud auth application-default login --impersonate-service-account tlc-pipeline@<project>.iam.gserviceaccount.com
    ```
 6. Check the connection: `python -m pipeline.check_gcp`
+7. After uploading, create the BigQuery external table: `python -m pipeline.create_raw_tables fhvhv`
 
 ## Upload to GCS
 
