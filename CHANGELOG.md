@@ -2,6 +2,19 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-20
+
+Google Cloud Storage and BigQuery external tables.
+
+### Added
+- `config.toml` + `pipeline.config`: project, region, bucket and BigQuery settings in one place
+- `pipeline.check_gcp`: checks credentials, bucket access and BigQuery as the `tlc-pipeline` service account
+- `pipeline.upload_to_gcs`: idempotent upload (CRC32C) to hive-partitioned paths. All 24 FHVHV months are in the bucket
+- `pipeline.create_raw_tables`: `raw` dataset and `raw.fhvhv_trips` external table
+- `pipeline.bq`: query helper with a hard cap on bytes billed
+- `04_bigquery.ipynb`: schema drift, what drives BigQuery cost, the bytes-billed cap, and the benchmark query compared with DuckDB
+- Google Cloud libraries and `db-dtypes` in requirements; GCP setup in the README
+
 ## [0.2.0] - 2026-11-20
 
 Data larger than RAM: pandas vs Polars vs DuckDB.

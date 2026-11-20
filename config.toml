@@ -1,0 +1,16 @@
+# Central configuration. Every script reads from here instead of hardcoding values.
+# None of these are secrets: credentials come from gcloud (Application Default Credentials).
+
+[gcp]
+project_id = "nyc-tlc-de-4821"
+region = "us-central1"
+bucket = "nyc-tlc-de-4821-raw"
+
+[bigquery]
+raw_dataset = "raw"
+# Hard cap per query: BigQuery refuses (and does not bill) any query above it.
+# The free tier is 1 TiB of queries per month.
+max_gb_billed_per_query = 30
+
+[local]
+datasets_dir = "datasets"
