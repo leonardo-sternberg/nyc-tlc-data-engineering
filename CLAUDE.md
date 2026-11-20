@@ -21,6 +21,7 @@ Optional later: Kafka → MinIO
 - GCP: project `nyc-tlc-de-4821`, region `us-central1`, bucket `nyc-tlc-de-4821-raw` (all in `config.toml`, read via `pipeline.config.CONFIG`). The billing account is shared with other projects of the user
 - Auth: Application Default Credentials impersonating `tlc-pipeline@...` (no key files). Its roles: `storage.objectAdmin`, `bigquery.dataEditor`, `bigquery.jobUser`. It **cannot read bucket metadata** (`storage.buckets.get`): do not call `bucket.reload()` in pipeline code
 - Run pipeline code as modules from the project root: `python -m pipeline.<name>`
+- Bucket content: `fhvhv/year=YYYY/month=MM/fhvhv_tripdata_YYYY-MM.parquet` for 2024-01..2025-12 (24 files, 11.7 GB), uploaded with `pipeline.upload_to_gcs` (idempotent, CRC32C). Upload speed from this machine: ~18–20 MB/s
 
 ## Git workflow
 - **git-flow**, chosen to learn it: `main` (releases only, tagged `vX.Y.Z`), `develop`, `feature/*`, `release/*`, `hotfix/*`

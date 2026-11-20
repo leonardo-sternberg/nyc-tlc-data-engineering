@@ -60,3 +60,13 @@ through **impersonation**, so no key file is ever downloaded:
    gcloud auth application-default login --impersonate-service-account tlc-pipeline@<project>.iam.gserviceaccount.com
    ```
 6. Check the connection: `python -m pipeline.check_gcp`
+
+## Upload to GCS
+
+```bash
+python -m pipeline.upload_to_gcs fhvhv --months 2025-01 --dry-run   # preview
+python -m pipeline.upload_to_gcs fhvhv                              # every month found locally
+```
+
+Files land in hive-partitioned paths (`fhvhv/year=2025/month=01/...`). The script is idempotent:
+files whose CRC32C checksum already matches the bucket are skipped.
