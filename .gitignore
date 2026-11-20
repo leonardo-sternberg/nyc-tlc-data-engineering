@@ -1,0 +1,19 @@
+# Data: ~12 GB of public TLC files, see README for how to download them
+datasets/
+
+# Generated reports (rebuilt by 02b_eda_auto.ipynb)
+reports/
+
+# Python virtual environment (rebuilt from requirements.txt)
+.venv/
+
+# Python / Jupyter caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
