@@ -2,7 +2,9 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-20
+
+Google Cloud Storage and BigQuery external tables.
 
 ### Added
 - `config.toml` + `pipeline.config`: project, region, bucket and BigQuery settings in one place
