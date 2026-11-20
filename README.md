@@ -14,7 +14,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 6. Dashboards
 7. Orchestration with Airflow
 
-**Status:** step 1 done (v0.1.0). See [CHANGELOG.md](CHANGELOG.md).
+**Status:** steps 1 and 2 done (v0.2.0). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Notebooks
 
