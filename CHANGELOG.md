@@ -2,7 +2,9 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-20
+
+Data larger than RAM: pandas vs Polars vs DuckDB.
 
 ### Added
 - `03_benchmark.ipynb` and `benchmarks/fhvhv_aggregate.py`: the same aggregation over all 24 FHVHV months (483M rows) with pandas, Polars and DuckDB. Measures time and peak memory, with all threads and with one thread, and checks that the results match
