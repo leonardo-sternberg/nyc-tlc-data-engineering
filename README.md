@@ -14,7 +14,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 6. Dashboards
 7. Orchestration with Airflow
 
-**Status:** step 1 done (v0.1.0). See [CHANGELOG.md](CHANGELOG.md).
+**Status:** steps 1 and 2 done (v0.2.0). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Notebooks
 
@@ -23,6 +23,9 @@ Go through a full data engineering path with a dataset that does not fit in memo
 | `01_memory_analysis.ipynb` | Memory usage of FHVHV in pandas and dtype optimization |
 | `02_eda_quality.ipynb` | Data quality checks and proposed dbt rules |
 | `02b_eda_auto.ipynb` | Automatic EDA reports with Sweetviz (saved to `reports/`) |
+| `03_benchmark.ipynb` | pandas vs Polars vs DuckDB on all 24 FHVHV months (483M rows): time, peak memory, threads |
+
+The benchmark query itself is in `benchmarks/fhvhv_aggregate.py`, run once per engine in a separate process.
 
 ## Data
 
