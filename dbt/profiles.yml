@@ -1,0 +1,17 @@
+# Connection to BigQuery. dbt reads profiles.yml from the folder it runs in (dbt/).
+# No secrets here: `method: oauth` uses Application Default Credentials, the same
+# `gcloud auth application-default login --impersonate-service-account ...` as pipeline/.
+# Keep project and location in sync with config.toml.
+
+nyc_tlc:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: nyc-tlc-de-4821
+      dataset: staging              # default dataset where dbt creates models
+      location: us-central1
+      threads: 4                    # models built in parallel
+      job_execution_timeout_seconds: 600
+      maximum_bytes_billed: 30000000000   # 30 GB cap per query, like pipeline/bq.py
