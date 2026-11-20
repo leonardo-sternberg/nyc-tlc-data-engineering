@@ -45,3 +45,18 @@ nbstripout --install --attributes .gitattributes
 ```
 
 Run the notebooks with the `.venv` kernel.
+
+## Google Cloud setup
+
+Values (project, region, bucket, datasets) live in `config.toml`. Code authenticates as a service account
+through **impersonation**, so no key file is ever downloaded:
+
+1. Install the Google Cloud CLI and run `gcloud init`
+2. Enable the APIs: `storage`, `bigquery`, `iam`, `iamcredentials`
+3. Create the service account `tlc-pipeline` with `roles/storage.objectAdmin`, `roles/bigquery.dataEditor` and `roles/bigquery.jobUser`
+4. Give your user `roles/iam.serviceAccountTokenCreator` on that service account
+5. Create local credentials that impersonate it:
+   ```bash
+   gcloud auth application-default login --impersonate-service-account tlc-pipeline@<project>.iam.gserviceaccount.com
+   ```
+6. Check the connection: `python -m pipeline.check_gcp`
