@@ -20,3 +20,7 @@ psutil==7.2.2
 google-cloud-storage==3.17.1
 google-cloud-bigquery==3.47.0
 db-dtypes==1.9.0
+
+# dbt (BigQuery adapter). dbt-core pinned: dbt-bigquery would otherwise pull a beta
+dbt-core==1.12.7
+dbt-bigquery==1.12.4

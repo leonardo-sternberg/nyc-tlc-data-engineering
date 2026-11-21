@@ -1,0 +1,18 @@
+# dbt project: transforms raw.* (external tables over GCS) into clean, tested tables.
+# Run every dbt command from this folder (dbt/), e.g. `dbt debug`, `dbt build`.
+
+name: nyc_tlc
+version: "1.0.0"
+profile: nyc_tlc          # which connection to use: defined in profiles.yml
+
+model-paths: ["models"]   # SQL models (one SELECT per file = one table or view)
+test-paths: ["tests"]     # custom data tests
+macro-paths: ["macros"]   # reusable SQL snippets
+seed-paths: ["seeds"]     # small CSVs loaded as tables (e.g. taxi zones)
+
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  nyc_tlc:
+    staging:
+      +materialized: view   # staging models are views by default: no data copied

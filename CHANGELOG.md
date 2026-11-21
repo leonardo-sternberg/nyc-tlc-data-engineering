@@ -2,6 +2,18 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+dbt staging layer with tests.
+
+### Added
+- dbt project in `dbt/` (dbt-core 1.12.7, dbt-bigquery 1.12.4) connected to BigQuery through the impersonated credentials (`method: oauth`), with a bytes-billed cap
+- `raw` source over the `raw.fhvhv_trips` external table
+- `stg_fhvhv_trips` view: renamed columns, `company` derived from the license number, Y/N flags as booleans, `cbd_congestion_fee` = 0 before 2025. No rows removed
+- Data tests: `accepted_values` (year, company), `not_null` (pickup/dropoff time, pickup zone)
+- `accepted_range` custom generic test, used on fares and driver pay with `severity: warn`. Failing rows are stored with their year and month in `staging_dbt_test__audit`
+- `taxi_zone_lookup` seed (265 zones) with `unique` and `not_null` tests on the id
+
 ## [0.3.0] - 2026-11-20
 
 Google Cloud Storage and BigQuery external tables.
