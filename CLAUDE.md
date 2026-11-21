@@ -7,7 +7,7 @@ A **learning project**. The owner wants to understand every step: explain what y
 1. Local exploration with pandas (done in v0.1.0)
 2. Data larger than RAM: pandas vs Polars vs DuckDB on FHVHV 2024 + 2025 (done, `03_benchmark.ipynb`)
 3. GCS + BigQuery external tables (done in v0.3.0, `04_bigquery.ipynb`)
-4. dbt staging with tests (in progress on `feature/dbt-staging`, project in `dbt/`)
+4. dbt staging with tests (done in v0.4.0, project in `dbt/`)
 5. Kimball star schema
 6. Dashboards
 7. Airflow orchestration
