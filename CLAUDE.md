@@ -7,7 +7,7 @@ A **learning project**. The owner wants to understand every step: explain what y
 1. Local exploration with pandas (done in v0.1.0)
 2. Data larger than RAM: pandas vs Polars vs DuckDB on FHVHV 2024 + 2025 (done, `03_benchmark.ipynb`)
 3. GCS + BigQuery external tables (done in v0.3.0, `04_bigquery.ipynb`)
-4. dbt staging with tests
+4. dbt staging with tests (in progress on `feature/dbt-staging`, project in `dbt/`)
 5. Kimball star schema
 6. Dashboards
 7. Airflow orchestration
@@ -41,3 +41,14 @@ Optional later: Kafka → MinIO
 - BigQuery cost: billed by **logical** bytes of the columns read (8 per number/timestamp, 2 + length per string), not Parquet size. Only `year`/`month` filters skip files; a `pickup_datetime` filter reads all 24. Dry run returns 0 for external tables
 - Always query through `pipeline.bq.query` (applies `maximum_bytes_billed` from `config.toml`, default 30 GB). Verified: over the cap, BigQuery refuses and bills nothing
 - Avoid re-running `04_bigquery.ipynb` casually: it bills ~34 GB of the 1 TiB monthly free tier
+- Free-tier usage: query `region-us-central1`.INFORMATION_SCHEMA.JOBS_BY_PROJECT with `bq` (the user's account). The 1 TiB is per billing account, shared with the user's other projects
+
+## dbt
+- Pin `dbt-core` and `dbt-bigquery` (1.12.x): unpinned, pip pulls a 1.13 beta. Run dbt from `dbt/` with `..\.venv\Scripts\dbt.exe` if the venv is not active
+- `profiles.yml` is in the project (no secrets: `method: oauth` uses ADC) with `maximum_bytes_billed` 30 GB
+- Layers: `raw` (external tables, dbt sources) → `staging` (views, no rows removed) → marts (step 5, Kimball)
+- Test syntax (1.12): `data_tests:`, test arguments under `arguments:`, test config (`severity`, `store_failures`, `alias`) under `config:`. Use `quote: false` for numeric `accepted_values`
+- Every test on the external table reads its column over all 24 files: full `dbt test` bills ~20 GB. Select tests (`--select`) when only some changed. `not_null` can be cheaper when files carry null_count statistics
+- Partition columns cost nothing (they come from the GCS path): verified, adding them to `extra_columns` did not change bytes billed
+- Negative `base_passenger_fare` (31,728 rows, peak 8,512 in 2024-02) and `driver_pay` (2,743) exist, none above 5000. Kept in staging and reported as warnings. Decision for step 5: flag in staging, keep or filter in the fact table (likely refunds/adjustments)
+- Run `dbt clean` when `target/` has stale compiled files from renamed tests
