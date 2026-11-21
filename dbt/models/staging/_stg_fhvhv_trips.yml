@@ -35,3 +35,35 @@ models:
         description: Taxi zone id where the trip started (1 to 265).
         data_tests:
           - not_null
+
+      # Known issue (02_eda_quality.ipynb): a few thousand negative values per month.
+      # severity: warn reports the count without failing the run, until we decide what to do.
+      # max_value 5000: the highest values in 2024-2025 are ~2,745 (fare) and ~2,022 (driver pay),
+      # so it passes today and only catches gross errors (e.g. 99999) in future months.
+      # store_failures: failing rows are saved to the staging_dbt_test__audit dataset (replaced on
+      # every run). extra_columns adds the partition columns, which cost nothing to read.
+      - name: base_passenger_fare
+        description: Fare before tolls, taxes, fees and tips, in USD.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+                extra_columns: [partition_year, partition_month]
+              config:
+                severity: warn
+                store_failures: true
+                alias: fare_out_of_range       # table name in the audit dataset
+
+      - name: driver_pay
+        description: Total paid to the driver, excluding tips, in USD.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+                extra_columns: [partition_year, partition_month]
+              config:
+                severity: warn
+                store_failures: true
+                alias: driver_pay_out_of_range
