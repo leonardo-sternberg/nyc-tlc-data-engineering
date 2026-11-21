@@ -1,0 +1,13 @@
+# Sources: tables that exist in BigQuery but are NOT built by dbt.
+# raw.* are external tables over GCS, created by `python -m pipeline.create_raw_tables`.
+# Models refer to them with {{ source('raw', 'fhvhv_trips') }} instead of a hardcoded name.
+
+sources:
+  - name: raw                 # name used inside dbt
+    schema: raw               # BigQuery dataset (the project comes from profiles.yml)
+    description: TLC trip records exactly as published, read from Parquet files in GCS.
+    tables:
+      - name: fhvhv_trips
+        description: >
+          High Volume For-Hire Vehicle trips (Uber, Lyft), one row per trip, 2024-01 to 2025-12.
+          Hive partitioned by `year` and `month`: always filter on them to read fewer files.

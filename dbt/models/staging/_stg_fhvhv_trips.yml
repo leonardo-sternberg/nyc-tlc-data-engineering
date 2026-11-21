@@ -1,0 +1,69 @@
+# Documentation and data tests for stg_fhvhv_trips.
+# Each test compiles to a query that returns the rows that BREAK the rule:
+# 0 rows = pass. Every test reads the tested column over all partitions, so it costs bytes.
+
+models:
+  - name: stg_fhvhv_trips
+    description: High Volume FHV trips (Uber, Lyft), one row per trip, renamed and typed. No rows removed.
+    columns:
+      - name: partition_year
+        description: From the GCS folder name (year=YYYY). Filter on it to read fewer files.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [2024, 2025]
+                quote: false        # integers, not strings
+
+      - name: company
+        description: Derived from license_number (HV0003 = Uber, HV0005 = Lyft).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Uber", "Lyft"]
+
+      - name: pickup_at
+        description: When the passenger was picked up.
+        data_tests:
+          - not_null
+
+      - name: dropoff_at
+        description: When the passenger was dropped off.
+        data_tests:
+          - not_null
+
+      - name: pickup_location_id
+        description: Taxi zone id where the trip started (1 to 265).
+        data_tests:
+          - not_null
+
+      # Known issue (02_eda_quality.ipynb): a few thousand negative values per month.
+      # severity: warn reports the count without failing the run, until we decide what to do.
+      # max_value 5000: the highest values in 2024-2025 are ~2,745 (fare) and ~2,022 (driver pay),
+      # so it passes today and only catches gross errors (e.g. 99999) in future months.
+      # store_failures: failing rows are saved to the staging_dbt_test__audit dataset (replaced on
+      # every run). extra_columns adds the partition columns, which cost nothing to read.
+      - name: base_passenger_fare
+        description: Fare before tolls, taxes, fees and tips, in USD.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+                extra_columns: [partition_year, partition_month]
+              config:
+                severity: warn
+                store_failures: true
+                alias: fare_out_of_range       # table name in the audit dataset
+
+      - name: driver_pay
+        description: Total paid to the driver, excluding tips, in USD.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+                extra_columns: [partition_year, partition_month]
+              config:
+                severity: warn
+                store_failures: true
+                alias: driver_pay_out_of_range

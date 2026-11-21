@@ -14,7 +14,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 6. Dashboards
 7. Orchestration with Airflow
 
-**Status:** steps 1 to 3 done (v0.3.0). See [CHANGELOG.md](CHANGELOG.md).
+**Status:** steps 1 to 4 done (v0.4.0). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Notebooks
 
@@ -72,3 +72,30 @@ python -m pipeline.upload_to_gcs fhvhv                              # every mont
 
 Files land in hive-partitioned paths (`fhvhv/year=2025/month=01/...`). The script is idempotent:
 files whose CRC32C checksum already matches the bucket are skipped.
+
+## dbt
+
+The dbt project lives in `dbt/` and connects to BigQuery with the same impersonated credentials
+(`method: oauth` in `dbt/profiles.yml`, so no key file). Run every command from the `dbt/` folder:
+
+```bash
+cd dbt
+dbt debug                                    # check the connection
+dbt seed                                     # load seeds/taxi_zone_lookup.csv into staging.taxi_zone_lookup
+dbt run                                      # build the staging views
+dbt test                                     # run all data tests (bills ~20 GB, see below)
+dbt build --select stg_fhvhv_trips           # run + test one model
+dbt test --select "test_name:accepted_range" # run only the range tests
+```
+
+| Layer | Dataset | Contents |
+|---|---|---|
+| raw | `raw` | `fhvhv_trips`: external table over the Parquet files in GCS (source) |
+| staging | `staging` | `stg_fhvhv_trips` view: renamed columns, `company` from the license number, Y/N flags as booleans, `cbd_congestion_fee` = 0 before 2025. No rows removed. `taxi_zone_lookup` seed |
+| test failures | `staging_dbt_test__audit` | Failing rows of the range tests (`fare_out_of_range`, `driver_pay_out_of_range`), replaced on every run |
+
+**Tests and cost.** A test is a query that returns the rows breaking a rule. On the external table each
+test reads its column across all 24 months, so `dbt test` bills about 20 GB of the free tier. Partition
+columns (`partition_year`, `partition_month`) come from the folder names and cost nothing to read.
+`accepted_range` is a custom generic test in `dbt/tests/generic/`. Negative fares and driver pay (a few
+thousand rows per month) are reported as warnings until the star schema decides how to treat them.

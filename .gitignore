@@ -17,3 +17,9 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# dbt build output and local state
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml

@@ -1,0 +1,27 @@
+# Seeds: small, static CSV files versioned with the project and loaded by `dbt seed`
+# into a native BigQuery table (dataset from profiles.yml). Good for lookups, not for big data.
+
+seeds:
+  - name: taxi_zone_lookup
+    description: >
+      TLC taxi zones (265 rows), copied as published from datasets/taxi_zone_lookup.csv.
+      Trips refer to zones by id (pickup_location_id, dropoff_location_id).
+      264 = Unknown and 265 = Outside of NYC are TLC placeholders, not real zones.
+    config:
+      column_types:            # declared, so dbt does not have to guess them from the CSV
+        LocationID: int64
+        Borough: string
+        Zone: string
+        service_zone: string
+    columns:
+      - name: LocationID
+        description: Taxi zone id (1 to 265).
+        data_tests:
+          - unique
+          - not_null
+      - name: Borough
+        description: NYC borough (Manhattan, Brooklyn, ...), EWR for Newark Airport.
+      - name: Zone
+        description: Zone name (neighbourhood or airport).
+      - name: service_zone
+        description: Yellow Zone (Manhattan core), Boro Zone, Airports or EWR.
