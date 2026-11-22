@@ -1,0 +1,103 @@
+models:
+  - name: fct_trips
+    description: >
+      One row per High Volume FHV trip (Uber, Lyft), 2024-2025. Partitioned by pickup_date (one
+      partition per day) and clustered by license_number and pickup_location_id. Loaded one month
+      per run with --vars "{year: YYYY, month: M}".
+    # Test cost: each test reads its column over the whole table (~157 MB per month loaded).
+    # With --vars, the `where` below limits every test to the month just loaded, so BigQuery reads
+    # only those daily partitions. Without --vars (plain `dbt test`), the whole table is tested.
+    # &month_filter defines the text once; *month_filter repeats it (YAML anchor and alias).
+    columns:
+      - name: pickup_date
+        description: Date of the pickup, partition column. Joins to dim_date.date_day.
+        data_tests:
+          - not_null:
+              config:
+                where: &month_filter >-
+                  {% if var('year', none) %}
+                  pickup_date between date({{ var('year') }}, {{ var('month') }}, 1)
+                  and last_day(date({{ var('year') }}, {{ var('month') }}, 1))
+                  {% else %} true {% endif %}
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+              config:
+                where: *month_filter
+      - name: pickup_location_id
+        description: Zone where the trip started. Joins to dim_zone.zone_id.
+        data_tests:
+          - not_null:
+              config:
+                where: *month_filter
+          - relationships:
+              arguments:
+                to: ref('dim_zone')
+                field: zone_id
+              config:
+                where: *month_filter
+      - name: dropoff_location_id
+        description: Zone where the trip ended. Joins to dim_zone.zone_id.
+        data_tests:
+          - not_null:
+              config:
+                where: *month_filter
+          - relationships:
+              arguments:
+                to: ref('dim_zone')
+                field: zone_id
+              config:
+                where: *month_filter
+      - name: license_number
+        description: TLC license of the company. Joins to dim_company.license_number.
+        data_tests:
+          - not_null:
+              config:
+                where: *month_filter
+          - relationships:
+              arguments:
+                to: ref('dim_company')
+                field: license_number
+              config:
+                where: *month_filter
+      - name: requested_at
+        description: When the passenger requested the ride.
+      - name: pickup_at
+        description: When the passenger was picked up.
+      - name: dropoff_at
+        description: When the passenger was dropped off.
+      - name: trip_miles
+        description: Trip distance in miles.
+      - name: trip_duration_seconds
+        description: Trip duration in seconds.
+      - name: base_passenger_fare
+        description: Fare before tolls, taxes, fees and tips, in USD. Negative values are kept (see is_negative_fare).
+      - name: tolls
+        description: Tolls paid, in USD.
+      - name: black_car_fund_fee
+        description: Black Car Fund fee, in USD.
+      - name: sales_tax
+        description: NYS sales tax, in USD.
+      - name: congestion_surcharge
+        description: NYS congestion surcharge, in USD.
+      - name: airport_fee
+        description: Airport fee for pickups and dropoffs at LaGuardia, JFK and Newark, in USD.
+      - name: cbd_congestion_fee
+        description: Manhattan congestion pricing fee (from January 2025), in USD. 0 in 2024.
+      - name: tips
+        description: Tips paid by the passenger, in USD.
+      - name: driver_pay
+        description: Total paid to the driver, excluding tips, in USD.
+      - name: is_shared_ride_requested
+        description: The passenger agreed to a shared ride.
+      - name: is_shared_ride_matched
+        description: The passenger actually shared the ride with another passenger.
+      - name: is_access_a_ride
+        description: Trip administered on behalf of the MTA Access-A-Ride program.
+      - name: is_wheelchair_requested
+        description: The passenger requested a wheelchair-accessible vehicle.
+      - name: is_wheelchair_matched
+        description: The trip was done in a wheelchair-accessible vehicle.
+      - name: is_negative_fare
+        description: True when base_passenger_fare is below 0, likely refunds or adjustments. Filter it out for revenue per trip.

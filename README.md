@@ -14,7 +14,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 6. Dashboards
 7. Orchestration with Airflow
 
-**Status:** steps 1 to 4 done (v0.4.0). See [CHANGELOG.md](CHANGELOG.md).
+**Status:** steps 1 to 5 done (v0.5.0). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Notebooks
 
@@ -82,20 +82,116 @@ The dbt project lives in `dbt/` and connects to BigQuery with the same impersona
 cd dbt
 dbt debug                                    # check the connection
 dbt seed                                     # load seeds/taxi_zone_lookup.csv into staging.taxi_zone_lookup
-dbt run                                      # build the staging views
-dbt test                                     # run all data tests (bills ~20 GB, see below)
-dbt build --select stg_fhvhv_trips           # run + test one model
+dbt build --exclude fct_trips                # staging view + dimensions, with their tests
+dbt build --select fct_trips --vars "{year: 2024, month: 1}"   # load one month of the fact table
 dbt test --select "test_name:accepted_range" # run only the range tests
 ```
+
+`fct_trips` needs `--vars` (see [Star schema](#star-schema)), so a plain `dbt run` or `dbt build` stops with
+"Required var 'year' not found": exclude it or pass the month.
 
 | Layer | Dataset | Contents |
 |---|---|---|
 | raw | `raw` | `fhvhv_trips`: external table over the Parquet files in GCS (source) |
 | staging | `staging` | `stg_fhvhv_trips` view: renamed columns, `company` from the license number, Y/N flags as booleans, `cbd_congestion_fee` = 0 before 2025. No rows removed. `taxi_zone_lookup` seed |
-| test failures | `staging_dbt_test__audit` | Failing rows of the range tests (`fare_out_of_range`, `driver_pay_out_of_range`), replaced on every run |
+| marts | `marts` | Star schema: `fct_trips`, `dim_zone`, `dim_date`, `dim_company` (tables) |
+| test failures | `dbt_test__audit` | Failing rows of the range tests (`fare_out_of_range`, `driver_pay_out_of_range`), replaced on every run |
+
+Datasets use the `+schema` name exactly as written (`marts`, not dbt's default `staging_marts`), thanks to
+`dbt/macros/generate_schema_name.sql`.
 
 **Tests and cost.** A test is a query that returns the rows breaking a rule. On the external table each
 test reads its column across all 24 months, so `dbt test` bills about 20 GB of the free tier. Partition
 columns (`partition_year`, `partition_month`) come from the folder names and cost nothing to read.
 `accepted_range` is a custom generic test in `dbt/tests/generic/`. Negative fares and driver pay (a few
-thousand rows per month) are reported as warnings until the star schema decides how to treat them.
+thousand rows per month) are reported as warnings; the fact table keeps them, flagged.
+
+## Star schema
+
+Kimball design for the High Volume FHV trips, in the `marts` dataset:
+
+```
+                 dim_date
+                    │ pickup_date
+dim_zone ──── fct_trips ──── dim_company
+   (pickup and dropoff zone)   (license_number)
+```
+
+| Table | Grain | Rows | Built from |
+|---|---|---|---|
+| `fct_trips` | one trip | ~20M per month | `stg_fhvhv_trips`, one month per run |
+| `dim_zone` | one TLC zone | 265 | `taxi_zone_lookup` seed. Used twice by the fact (role-playing) |
+| `dim_date` | one day | 731 (2024-2025) | generated in SQL |
+| `dim_company` | one HVFHS license | 4 | written in SQL (Juno, Uber, Via, Lyft) |
+
+The fact holds only keys, timestamps, measures (miles, duration, fare, fees, tips, driver pay) and flags.
+Descriptive attributes live in the dimensions. Negative fares (likely refunds or adjustments) are kept and
+flagged with `is_negative_fare`.
+
+**Loading `fct_trips`.** It is an incremental model partitioned by `pickup_date` (one partition per day)
+and clustered by `license_number` and `pickup_location_id`. Each run loads one month:
+
+```bash
+dbt build --select fct_trips --vars "{year: 2024, month: 3}"
+```
+
+- The month filter on `partition_year` / `partition_month` always applies, so BigQuery opens only that
+  month's file: **~2.9 GB billed per month**.
+- `insert_overwrite` replaces that month's days, so re-running a month does not duplicate rows.
+- `copy_partitions` moves the new days in with free copy jobs instead of a `MERGE` (which doubled the cost).
+- With `--vars`, the 8 tests (`not_null`, `relationships` to each dimension) only check that month:
+  ~0.3 GB per test no matter how many months are loaded.
+- **Do not use `--full-refresh`** unless the columns change: it rebuilds the table with only the month
+  passed in `--vars`, so every month must be loaded again afterwards.
+
+| Months loaded | Storage | Monthly storage cost |
+|---|---|---|
+| 2 (current) | ~5.9 GB | free (10 GiB free tier) |
+| 24 | ~71 GB | ~US$1.10, ~US$0.55 after 90 days unchanged (long-term) |
+
+## Delete and rebuild
+
+Processing fits the free tier (1 TiB of queries per month), storage does not: the GCS files (~11 GB, 5 GB
+free) and a full `fct_trips` (~71 GB, 10 GiB free) cost a little every day. Everything can be rebuilt from
+the public TLC files and this repository, so delete what costs when the project is paused.
+
+The commands below use your own `gcloud` account. `bq rm` asks for confirmation before deleting.
+
+**Pause (delete what costs, keep everything else):**
+
+```bash
+bq rm -t nyc-tlc-de-4821:marts.fct_trips                  # the fact table
+gcloud storage rm --recursive gs://nyc-tlc-de-4821-raw/fhvhv  # the Parquet files (the empty bucket is free)
+```
+
+The dimensions, views and external table stay (they cost nothing). Queries on `raw` and `staging` fail
+until the files are uploaded again.
+
+**Full teardown (end of the project):**
+
+```bash
+bq rm -r -d nyc-tlc-de-4821:marts
+bq rm -r -d nyc-tlc-de-4821:dbt_test__audit
+bq rm -r -d nyc-tlc-de-4821:staging_dbt_test__audit       # old name of the test failures dataset
+bq rm -r -d nyc-tlc-de-4821:staging
+bq rm -r -d nyc-tlc-de-4821:raw
+gcloud storage rm --recursive gs://nyc-tlc-de-4821-raw     # files and bucket
+```
+
+**Rebuild** (in this order, from the project root; the files must be in `datasets/`, see [Data](#data)):
+
+| Step | Command | Needed after | Billed |
+|---|---|---|---|
+| 1. Recreate the bucket | `gcloud storage buckets create gs://nyc-tlc-de-4821-raw --location=us-central1` | teardown | free |
+| 2. Upload the files | `python -m pipeline.upload_to_gcs fhvhv` | pause, teardown | free (upload) |
+| 3. External table | `python -m pipeline.create_raw_tables fhvhv` | teardown | free |
+| 4. Seed, views and dimensions | `cd dbt` then `dbt seed` and `dbt run --exclude fct_trips` | teardown | a few MB |
+| 5. Fact table, one month per run | `dbt build --select fct_trips --vars "{year: 2024, month: 1}"` | pause, teardown | ~2.9 GB + ~1 GB of tests per month |
+
+To load several months, loop in PowerShell (here the first quarter of 2024):
+
+```powershell
+foreach ($m in 1..3) { dbt build --select fct_trips --vars "{year: 2024, month: $m}" }
+```
+
+A full rebuild of 24 months bills about 100 GB of queries, inside the free tier.
