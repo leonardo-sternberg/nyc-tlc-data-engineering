@@ -1,0 +1,17 @@
+models:
+  - name: dim_zone
+    description: One row per TLC taxi zone. Joined to fct_trips twice (pickup and dropoff zone).
+    columns:
+      - name: zone_id
+        description: TLC zone id (1 to 265), primary key. Same value as pickup_location_id / dropoff_location_id.
+        data_tests:
+          - unique
+          - not_null
+      - name: borough
+        description: NYC borough (Manhattan, Brooklyn, ...), EWR for Newark Airport.
+      - name: zone_name
+        description: Zone name (neighbourhood or airport).
+      - name: service_zone
+        description: Yellow Zone (Manhattan core), Boro Zone, Airports or EWR.
+      - name: is_unknown_zone
+        description: True for the TLC placeholders 264 (Unknown) and 265 (Outside of NYC).
