@@ -8,7 +8,7 @@ A **learning project**. The owner wants to understand every step: explain what y
 2. Data larger than RAM: pandas vs Polars vs DuckDB on FHVHV 2024 + 2025 (done, `03_benchmark.ipynb`)
 3. GCS + BigQuery external tables (done in v0.3.0, `04_bigquery.ipynb`)
 4. dbt staging with tests (done in v0.4.0, project in `dbt/`)
-5. Kimball star schema (in progress on `feature/kimball-star-schema`, `dbt/models/marts/`)
+5. Kimball star schema (done in v0.5.0, `dbt/models/marts/`)
 6. Dashboards
 7. Airflow orchestration
 Optional later: Kafka → MinIO
