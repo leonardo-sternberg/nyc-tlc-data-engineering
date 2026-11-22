@@ -14,7 +14,7 @@ Go through a full data engineering path with a dataset that does not fit in memo
 6. Dashboards
 7. Orchestration with Airflow
 
-**Status:** steps 1 to 5 done (v0.5.0). See [CHANGELOG.md](CHANGELOG.md).
+**Status:** steps 1 to 6 done (v0.6.0). See [CHANGELOG.md](CHANGELOG.md).
 
 ## Notebooks
 
@@ -82,19 +82,23 @@ The dbt project lives in `dbt/` and connects to BigQuery with the same impersona
 cd dbt
 dbt debug                                    # check the connection
 dbt seed                                     # load seeds/taxi_zone_lookup.csv into staging.taxi_zone_lookup
-dbt build --exclude fct_trips                # staging view + dimensions, with their tests
-dbt build --select fct_trips --vars "{year: 2024, month: 1}"   # load one month of the fact table
+dbt build --exclude fct_trips+               # staging view + dimensions, with their tests
+dbt build --select fct_trips+ --vars "{year: 2024, month: 1}"  # load one month: fact + aggregates
 dbt test --select "test_name:accepted_range" # run only the range tests
+dbt docs generate --vars "{year: 2024, month: 1}"   # documentation site and catalog
+dbt docs serve                               # open it at http://localhost:8080 (lineage graph)
 ```
 
-`fct_trips` needs `--vars` (see [Star schema](#star-schema)), so a plain `dbt run` or `dbt build` stops with
-"Required var 'year' not found": exclude it or pass the month.
+`fct_trips` and the aggregates built from it need `--vars` (see [Star schema](#star-schema)), so a plain
+`dbt run`, `dbt build` or `dbt docs generate` stops with "Required var 'year' not found": exclude them
+(`--exclude fct_trips+`, the `+` adds everything downstream) or pass a month. `dbt docs generate` only
+compiles the models with that month, it loads nothing.
 
 | Layer | Dataset | Contents |
 |---|---|---|
 | raw | `raw` | `fhvhv_trips`: external table over the Parquet files in GCS (source) |
 | staging | `staging` | `stg_fhvhv_trips` view: renamed columns, `company` from the license number, Y/N flags as booleans, `cbd_congestion_fee` = 0 before 2025. No rows removed. `taxi_zone_lookup` seed |
-| marts | `marts` | Star schema: `fct_trips`, `dim_zone`, `dim_date`, `dim_company` (tables) |
+| marts | `marts` | Star schema: `fct_trips`, `dim_zone`, `dim_date`, `dim_company` (tables), and the dashboard aggregates `agg_trips_daily`, `agg_trips_hourly` |
 | test failures | `dbt_test__audit` | Failing rows of the range tests (`fare_out_of_range`, `driver_pay_out_of_range`), replaced on every run |
 
 Datasets use the `+schema` name exactly as written (`marts`, not dbt's default `staging_marts`), thanks to
@@ -144,10 +148,71 @@ dbt build --select fct_trips --vars "{year: 2024, month: 3}"
 - **Do not use `--full-refresh`** unless the columns change: it rebuilds the table with only the month
   passed in `--vars`, so every month must be loaded again afterwards.
 
+All 24 months are loaded: 483,060,132 trips. Rows per month cost nothing to check, from partition
+metadata:
+
+```sql
+select substr(partition_id, 1, 6) as year_month, sum(total_rows) as trips
+from `nyc-tlc-de-4821.marts.INFORMATION_SCHEMA.PARTITIONS`
+where table_name = 'fct_trips'
+group by 1 order by 1
+```
+
 | Months loaded | Storage | Monthly storage cost |
 |---|---|---|
-| 2 (current) | ~5.9 GB | free (10 GiB free tier) |
-| 24 | ~71 GB | ~US$1.10, ~US$0.55 after 90 days unchanged (long-term) |
+| 2 | ~5.9 GB | free (10 GiB free tier) |
+| 24 (current) | ~72 GB (67.5 GiB) | ~US$1.10, ~US$0.55 after 90 days unchanged (long-term) |
+
+## Dashboard aggregates
+
+Dashboards never read `fct_trips`: every chart would scan GBs. They read two small aggregate tables, built
+from the fact one month per run, like it (`dbt build --select fct_trips+ --vars ...` loads all three).
+
+| Table | Grain | Rows (24 months) | Size | Billed per month loaded |
+|---|---|---|---|---|
+| `agg_trips_daily` | pickup day x company x pickup zone | 377,187 | ~48 MiB | ~1.4 GB |
+| `agg_trips_hourly` | pickup month x day of week x hour x company | 8,064 | <1 MiB | ~0.8 GB |
+
+- Both store **sums and counts, never averages**. The dashboard divides (`SUM(total_fare) / SUM(trips)`),
+  so averages stay correct for any filter. An average of averages would weight a day with 10 trips the same
+  as a day with 1,000.
+- Dimension names (borough, zone, company, day name) are copied in, so the dashboard needs no joins.
+- `agg_trips_hourly.days` counts the calendar days in each row (4 or 5 Mondays in a month), so trips per
+  day is `trips / days`. It also absorbs the missing 2 a.m. hour on daylight saving Sundays (March), when
+  Lyft records no trips but Uber does.
+- `days` is **semi-additive**: it adds up over months but not over companies (each company row repeats the
+  same days). Trips per day across companies is `SUM(trips) / (SUM(days) / COUNT_DISTINCT(company))`.
+- Both sums match the fact table: 483,060,132 trips.
+
+## Dashboard
+
+A Looker Studio report over the two aggregates, with report-level filters for date range and company:
+
+| Page | Source | Charts |
+|---|---|---|
+| Overview | `agg_trips_daily` | Scorecards (trips, avg fare, avg tip, avg duration), trips per month by company |
+| Where | `agg_trips_daily` | Trips and avg fare by pickup borough, top pickup zones (trips, avg fare, avg miles) |
+| When | `agg_trips_hourly` | Heatmap of trips per day by hour and day of week |
+
+Calculated fields in Looker Studio (data source, **Add a field**):
+
+| Field | Formula |
+|---|---|
+| Avg fare | `SUM(total_fare) / SUM(trips)` |
+| Avg tip | `SUM(total_tips) / SUM(trips)` |
+| Avg distance (miles) | `SUM(total_miles) / SUM(trips)` |
+| Avg duration (min) | `SUM(total_duration_seconds) / SUM(trips) / 60` |
+| Trips per day (hourly source) | `SUM(trips) / (SUM(days) / COUNT_DISTINCT(company))` |
+
+Notes from building it:
+- Set numeric ids (`pickup_location_id`, `day_of_week`, `pickup_hour`) to aggregation **None**, and
+  `pickup_hour` to type **Number**: Looker Studio guesses sum and a time-of-day type.
+- The Where page filters out the `EWR`, `N/A` and `Unknown` boroughs (about 20k trips): sorted by average
+  fare, Newark (31 trips) came first. Averages over tiny volumes are noise.
+- Clicking a chart point cross-filters the other charts on the page (turn it off in **Chart interactions**).
+- Each chart is one BigQuery query on the aggregates (10 MB minimum billed), and results are cached for
+  about 12 hours. If the report is shared with the owner's credentials, viewers' queries are billed to
+  this project.
 
 ## Delete and rebuild
 
@@ -185,13 +250,14 @@ gcloud storage rm --recursive gs://nyc-tlc-de-4821-raw     # files and bucket
 | 1. Recreate the bucket | `gcloud storage buckets create gs://nyc-tlc-de-4821-raw --location=us-central1` | teardown | free |
 | 2. Upload the files | `python -m pipeline.upload_to_gcs fhvhv` | pause, teardown | free (upload) |
 | 3. External table | `python -m pipeline.create_raw_tables fhvhv` | teardown | free |
-| 4. Seed, views and dimensions | `cd dbt` then `dbt seed` and `dbt run --exclude fct_trips` | teardown | a few MB |
-| 5. Fact table, one month per run | `dbt build --select fct_trips --vars "{year: 2024, month: 1}"` | pause, teardown | ~2.9 GB + ~1 GB of tests per month |
+| 4. Seed, views and dimensions | `cd dbt` then `dbt seed` and `dbt run --exclude fct_trips+` | teardown | a few MB |
+| 5. Fact and aggregates, one month per run | `dbt build --select fct_trips+ --vars "{year: 2024, month: 1}"` | pause, teardown | ~2.9 GB + ~1 GB of tests + ~2.2 GB of aggregates per month |
 
-To load several months, loop in PowerShell (here the first quarter of 2024):
+To load all 24 months, loop in PowerShell:
 
 ```powershell
-foreach ($m in 1..3) { dbt build --select fct_trips --vars "{year: 2024, month: $m}" }
+foreach ($y in 2024, 2025) { foreach ($m in 1..12) { dbt build --select fct_trips+ --vars "{year: $y, month: $m}" } }
 ```
 
-A full rebuild of 24 months bills about 100 GB of queries, inside the free tier.
+A full rebuild of 24 months bills about 150 GB of queries, inside the free tier. The Looker Studio report
+keeps working after a rebuild: it points to the table names, not to the data.

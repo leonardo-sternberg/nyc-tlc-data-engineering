@@ -9,7 +9,7 @@ A **learning project**. The owner wants to understand every step: explain what y
 3. GCS + BigQuery external tables (done in v0.3.0, `04_bigquery.ipynb`)
 4. dbt staging with tests (done in v0.4.0, project in `dbt/`)
 5. Kimball star schema (done in v0.5.0, `dbt/models/marts/`)
-6. Dashboards
+6. Dashboards (done in v0.6.0, Looker Studio over `agg_trips_daily` and `agg_trips_hourly`)
 7. Airflow orchestration
 Optional later: Kafka → MinIO
 
@@ -55,9 +55,15 @@ Optional later: Kafka → MinIO
 
 ## Star schema (marts)
 - `generate_schema_name` is overridden: `+schema: marts` gives dataset `marts`; test failures go to `dbt_test__audit`
-- `fct_trips` needs `--vars "{year: YYYY, month: M}"` (no default on purpose): plain `dbt run`/`build` fails on it, use `--exclude fct_trips`. Loaded so far: 2024-01 and 2024-02 only (storage stays in the 10 GiB free tier)
+- `fct_trips` and its aggregates need `--vars "{year: YYYY, month: M}"` (no default on purpose): plain `dbt run`/`build`/`docs generate` fails on them. Use `--exclude fct_trips+`, or `--select fct_trips+ --vars ...` to load a month of all three. `dbt docs generate` needs `--vars` too (it compiles every model)
+- All 24 months are loaded in `fct_trips` (483,060,132 trips, ~72 GB, ~US$1.10/month of storage) and in both aggregates
 - `insert_overwrite` alone bills the month twice (temp table + MERGE, 5.8 GB). `copy_partitions: true` replaces the MERGE with free copy jobs (2.9 GB, but ~1 copy job per day, slower)
 - Never `--full-refresh` fct_trips casually: it rebuilds with only the month in `--vars`
 - Test `where` filters: the filter column is billed too (relationships with the month filter = ~310 MB, two columns of one month). `not_null` on native tables billed 0 bytes (block metadata)
 - Free row counts per month: `marts.INFORMATION_SCHEMA.PARTITIONS` (metadata, 0 bytes)
+- Dashboards read only the aggregates, never `fct_trips`. Aggregates store sums and counts, never averages; Looker Studio divides (`SUM(total_fare) / SUM(trips)`)
+- `agg_trips_hourly.days` is semi-additive: it adds over months, not over companies (each company row repeats it). Trips per day across companies = `SUM(trips) / (SUM(days) / COUNT_DISTINCT(company))`
+- Daylight saving: hour 2 of the March spring-forward Sunday does not exist. Lyft has no trips then, Uber does (17,542 vs 17,544 day-hours over 2 years)
+- Looker Studio: set numeric ids to aggregation None and `pickup_hour` to Number; filter out boroughs `EWR`, `N/A`, `Unknown` (tiny volumes distort averages); pivot tables have no "fit to width", so the heatmap puts hours in rows
+- PowerShell 5.1 strips inner double quotes when passing a query to `bq.exe`: write SQL without string literals (or with single quotes outside), e.g. filter on `length(partition_id)` instead of table names
 - Plan: after step 7, full GCP teardown (README "Delete and rebuild"). Free tiers are per billing account, shared with the user's other projects; GCS is already over its 5 GB free tier
