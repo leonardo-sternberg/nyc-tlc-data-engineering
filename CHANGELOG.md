@@ -2,6 +2,20 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Kimball star schema.
+
+### Added
+- `marts` dataset with tables: `fct_trips` (one row per trip), `dim_zone`, `dim_date`, `dim_company`
+- `fct_trips`: incremental model loaded one month per run (`--vars "{year: YYYY, month: M}"`), partitioned by `pickup_date`, clustered by `license_number` and `pickup_location_id`, `insert_overwrite` with `copy_partitions` (~2.9 GB billed per month, re-runs do not duplicate rows). Negative fares kept and flagged with `is_negative_fare`
+- `not_null` and `relationships` tests on the fact keys, limited to the loaded month when `--vars` is passed
+- `generate_schema_name` macro: custom schemas are used as written (`marts`, not `staging_marts`)
+- README: star schema, how to load a month, storage costs, and a delete and rebuild guide
+
+### Changed
+- Test failures now go to the `dbt_test__audit` dataset (was `staging_dbt_test__audit`)
+
 ## [0.4.0] - 2026-11-21
 
 dbt staging layer with tests.

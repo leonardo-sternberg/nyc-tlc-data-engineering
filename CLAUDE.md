@@ -8,7 +8,7 @@ A **learning project**. The owner wants to understand every step: explain what y
 2. Data larger than RAM: pandas vs Polars vs DuckDB on FHVHV 2024 + 2025 (done, `03_benchmark.ipynb`)
 3. GCS + BigQuery external tables (done in v0.3.0, `04_bigquery.ipynb`)
 4. dbt staging with tests (done in v0.4.0, project in `dbt/`)
-5. Kimball star schema
+5. Kimball star schema (in progress on `feature/kimball-star-schema`, `dbt/models/marts/`)
 6. Dashboards
 7. Airflow orchestration
 Optional later: Kafka → MinIO
@@ -52,3 +52,12 @@ Optional later: Kafka → MinIO
 - Partition columns cost nothing (they come from the GCS path): verified, adding them to `extra_columns` did not change bytes billed
 - Negative `base_passenger_fare` (31,728 rows, peak 8,512 in 2024-02) and `driver_pay` (2,743) exist, none above 5000. Kept in staging and reported as warnings. Decision for step 5: flag in staging, keep or filter in the fact table (likely refunds/adjustments)
 - Run `dbt clean` when `target/` has stale compiled files from renamed tests
+
+## Star schema (marts)
+- `generate_schema_name` is overridden: `+schema: marts` gives dataset `marts`; test failures go to `dbt_test__audit`
+- `fct_trips` needs `--vars "{year: YYYY, month: M}"` (no default on purpose): plain `dbt run`/`build` fails on it, use `--exclude fct_trips`. Loaded so far: 2024-01 and 2024-02 only (storage stays in the 10 GiB free tier)
+- `insert_overwrite` alone bills the month twice (temp table + MERGE, 5.8 GB). `copy_partitions: true` replaces the MERGE with free copy jobs (2.9 GB, but ~1 copy job per day, slower)
+- Never `--full-refresh` fct_trips casually: it rebuilds with only the month in `--vars`
+- Test `where` filters: the filter column is billed too (relationships with the month filter = ~310 MB, two columns of one month). `not_null` on native tables billed 0 bytes (block metadata)
+- Free row counts per month: `marts.INFORMATION_SCHEMA.PARTITIONS` (metadata, 0 bytes)
+- Plan: after step 7, full GCP teardown (README "Delete and rebuild"). Free tiers are per billing account, shared with the user's other projects; GCS is already over its 5 GB free tier
