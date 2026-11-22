@@ -4,39 +4,63 @@ models:
       One row per High Volume FHV trip (Uber, Lyft), 2024-2025. Partitioned by pickup_date (one
       partition per day) and clustered by license_number and pickup_location_id. Loaded one month
       per run with --vars "{year: YYYY, month: M}".
+    # Test cost: each test reads its column over the whole table (~157 MB per month loaded).
+    # With --vars, the `where` below limits every test to the month just loaded, so BigQuery reads
+    # only those daily partitions. Without --vars (plain `dbt test`), the whole table is tested.
+    # &month_filter defines the text once; *month_filter repeats it (YAML anchor and alias).
     columns:
       - name: pickup_date
         description: Date of the pickup, partition column. Joins to dim_date.date_day.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                where: &month_filter >-
+                  {% if var('year', none) %}
+                  pickup_date between date({{ var('year') }}, {{ var('month') }}, 1)
+                  and last_day(date({{ var('year') }}, {{ var('month') }}, 1))
+                  {% else %} true {% endif %}
           - relationships:
               arguments:
                 to: ref('dim_date')
                 field: date_day
+              config:
+                where: *month_filter
       - name: pickup_location_id
         description: Zone where the trip started. Joins to dim_zone.zone_id.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                where: *month_filter
           - relationships:
               arguments:
                 to: ref('dim_zone')
                 field: zone_id
+              config:
+                where: *month_filter
       - name: dropoff_location_id
         description: Zone where the trip ended. Joins to dim_zone.zone_id.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                where: *month_filter
           - relationships:
               arguments:
                 to: ref('dim_zone')
                 field: zone_id
+              config:
+                where: *month_filter
       - name: license_number
         description: TLC license of the company. Joins to dim_company.license_number.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                where: *month_filter
           - relationships:
               arguments:
                 to: ref('dim_company')
                 field: license_number
+              config:
+                where: *month_filter
       - name: requested_at
         description: When the passenger requested the ride.
       - name: pickup_at
