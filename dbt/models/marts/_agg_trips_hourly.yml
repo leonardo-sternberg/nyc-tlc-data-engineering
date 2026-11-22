@@ -1,0 +1,52 @@
+models:
+  - name: agg_trips_hourly
+    description: >
+      Hourly aggregate of fct_trips for the day of week x hour heatmap: one row per pickup month x
+      day of week x pickup hour x company (~8k rows for 2024-2025). Stores sums and counts, never
+      averages. `days` counts the calendar days in the row, so trips per day = trips / days stays
+      fair between weekdays with 4 or 5 occurrences in a month. Partitioned by pickup_month.
+      Loaded one month per run with --vars "{year: YYYY, month: M}".
+    # Test cost: the table is tiny and native, so not_null tests read a few MB at most.
+    # The grain is guaranteed by the GROUP BY in the model.
+    columns:
+      # when
+      - name: pickup_month
+        description: First day of the pickup month. Partition column (monthly partitions).
+        data_tests:
+          - not_null
+      - name: year_month
+        description: Year and month of the pickup (from dim_date), for filters.
+        data_tests:
+          - not_null
+      - name: day_of_week
+        description: Day of the week number, 1 = Sunday to 7 = Saturday (from dim_date). Use it to sort day_name.
+        data_tests:
+          - not_null
+      - name: day_name
+        description: Day of the week name (from dim_date).
+      - name: pickup_hour
+        description: Hour of the pickup, 0 to 23, in New York local time (as recorded by the TLC).
+        data_tests:
+          - not_null
+
+      # who
+      - name: company
+        description: Company name (from dim_company). Only Uber and Lyft appear in 2024-2025.
+        data_tests:
+          - not_null
+
+      # measures (sums and counts)
+      - name: days
+        description: >
+          Number of calendar days in the row (e.g. 4 or 5 Mondays in a month). Divide by it to get
+          per-day values: trips / days.
+        data_tests:
+          - not_null
+      - name: trips
+        description: Number of trips in the row.
+        data_tests:
+          - not_null
+      - name: total_fare
+        description: Sum of base_passenger_fare (USD). Includes negative fares.
+      - name: total_duration_seconds
+        description: Sum of trip_duration_seconds. Average duration = total_duration_seconds / trips.

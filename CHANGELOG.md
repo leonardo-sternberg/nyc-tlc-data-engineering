@@ -2,6 +2,21 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-22
+
+Dashboards.
+
+### Added
+- `agg_trips_daily`: one row per pickup day x company x pickup zone (377,187 rows, ~48 MiB), with sums and counts and the dimension names copied in. Incremental, monthly partitions, loaded one month per run (~1.4 GB billed per month)
+- `agg_trips_hourly`: one row per pickup month x day of week x hour x company (8,064 rows), with a `days` column so trips per day stays fair between weekdays with 4 or 5 occurrences and on daylight saving Sundays (~0.8 GB billed per month)
+- `not_null` tests and column descriptions for both aggregates
+- Looker Studio report with three pages: Overview (scorecards, trips per month by company), Where (boroughs and top pickup zones), When (heatmap of trips per day by hour and day of week)
+- README: dashboard aggregates, the dashboard and its calculated fields, `dbt docs`
+
+### Changed
+- All 24 months of `fct_trips` are loaded (483,060,132 trips, ~72 GB)
+- Commands use `fct_trips+` (fact and aggregates): `--select fct_trips+ --vars ...` to load a month, `--exclude fct_trips+` to build the rest
+
 ## [0.5.0] - 2026-11-22
 
 Kimball star schema.
