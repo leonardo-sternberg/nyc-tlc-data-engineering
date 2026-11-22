@@ -11,11 +11,14 @@
 -- Use it only when the columns change, then reload every month.
 --
 -- Negative fares (refunds/adjustments) are kept and flagged with is_negative_fare.
+--
+-- copy_partitions: the new days are moved in with a BigQuery copy job (free) instead of a
+-- MERGE query, which would read the month a second time (~2.9 GB more per month).
 
 {{ config(
     materialized = 'incremental',
     incremental_strategy = 'insert_overwrite',
-    partition_by = {'field': 'pickup_date', 'data_type': 'date'},
+    partition_by = {'field': 'pickup_date', 'data_type': 'date', 'copy_partitions': true},
     cluster_by = ['license_number', 'pickup_location_id']
 ) }}
 
