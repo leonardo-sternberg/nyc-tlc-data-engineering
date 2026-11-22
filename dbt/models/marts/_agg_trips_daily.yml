@@ -1,0 +1,61 @@
+models:
+  - name: agg_trips_daily
+    description: >
+      Daily aggregate of fct_trips for dashboards: one row per pickup day x company x pickup zone
+      (~380k rows for 2024-2025). Stores sums and counts, never averages, so any average
+      (e.g. total_fare / trips) stays correct for any filter. Dimension names are copied in, so
+      dashboards need no joins. Partitioned by month of pickup_date. Loaded one month per run with
+      --vars "{year: YYYY, month: M}".
+    # Test cost: the table is small and native, so these not_null tests read a few MB at most
+    # (often 0 bytes, from block metadata). No month filter is needed, unlike fct_trips.
+    # The grain is guaranteed by the GROUP BY in the model.
+    columns:
+      # when
+      - name: pickup_date
+        description: Date of the pickup. Partition column (monthly partitions).
+        data_tests:
+          - not_null
+      - name: year_month
+        description: Year and month of the pickup (from dim_date), for monthly charts.
+        data_tests:
+          - not_null
+      - name: day_name
+        description: Day of the week name (from dim_date).
+      - name: is_weekend
+        description: True on Saturday and Sunday (from dim_date).
+
+      # who and where
+      - name: company
+        description: Company name (from dim_company). Only Uber and Lyft appear in 2024-2025.
+        data_tests:
+          - not_null
+      - name: pickup_location_id
+        description: TLC zone where the trips started. Same key as dim_zone.zone_id.
+        data_tests:
+          - not_null
+      - name: pickup_borough
+        description: Borough of the pickup zone (from dim_zone).
+        data_tests:
+          - not_null
+      - name: pickup_zone_name
+        description: Name of the pickup zone (from dim_zone).
+
+      # measures (sums and counts)
+      - name: trips
+        description: Number of trips in the row.
+        data_tests:
+          - not_null
+      - name: total_fare
+        description: Sum of base_passenger_fare (USD). Includes negative fares (see negative_fare_trips).
+      - name: total_tips
+        description: Sum of tips (USD).
+      - name: total_driver_pay
+        description: Sum of driver_pay (USD).
+      - name: total_miles
+        description: Sum of trip_miles.
+      - name: total_duration_seconds
+        description: Sum of trip_duration_seconds.
+      - name: total_cbd_congestion_fee
+        description: Sum of cbd_congestion_fee (USD). Zero before 2025.
+      - name: negative_fare_trips
+        description: Number of trips with a negative base_passenger_fare (likely refunds or adjustments).
