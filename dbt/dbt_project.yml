@@ -16,3 +16,6 @@ models:
   nyc_tlc:
     staging:
       +materialized: view   # staging models are views by default: no data copied
+    marts:
+      +materialized: table  # star schema: stored tables, so dashboards do not re-read GCS
+      +schema: marts        # BigQuery dataset `marts` (see macros/generate_schema_name.sql)
