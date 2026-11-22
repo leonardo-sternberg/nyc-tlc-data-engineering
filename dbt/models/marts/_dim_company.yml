@@ -1,0 +1,14 @@
+models:
+  - name: dim_company
+    description: One row per High Volume FHV license (TLC code and company name). Only Uber and Lyft appear in 2024-2025.
+    columns:
+      - name: license_number
+        description: TLC license code (HV0002 to HV0005), primary key. Same value as license_number in fct_trips.
+        data_tests:
+          - unique
+          - not_null
+      - name: company
+        description: Company name (Juno, Uber, Via, Lyft).
+        data_tests:
+          - unique
+          - not_null
